@@ -76,6 +76,83 @@ const userDb = {
     } catch (err) {
       throw err;
     }
+  },
+
+  // Increment failed login attempts
+  incrementFailedAttempts: (userId) => {
+    try {
+      db.prepare(`
+        UPDATE users 
+        SET failed_login_attempts = failed_login_attempts + 1,
+            last_failed_attempt = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(userId);
+      
+      const row = db.prepare('SELECT failed_login_attempts FROM users WHERE id = ?').get(userId);
+      return row.failed_login_attempts;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Clear failed login attempts
+  clearFailedAttempts: (userId) => {
+    try {
+      db.prepare(`
+        UPDATE users 
+        SET failed_login_attempts = 0,
+            last_failed_attempt = NULL
+        WHERE id = ?
+      `).run(userId);
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Lock user account
+  lockAccount: (userId, minutes) => {
+    try {
+      const lockedUntil = new Date();
+      lockedUntil.setMinutes(lockedUntil.getMinutes() + minutes);
+      
+      db.prepare(`
+        UPDATE users 
+        SET is_locked = 1,
+            locked_until = ?
+        WHERE id = ?
+      `).run(lockedUntil.toISOString(), userId);
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Unlock user account
+  unlockAccount: (userId) => {
+    try {
+      db.prepare(`
+        UPDATE users 
+        SET is_locked = 0,
+            locked_until = NULL,
+            failed_login_attempts = 0
+        WHERE id = ?
+      `).run(userId);
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Get account lock information
+  getAccountLockInfo: (userId) => {
+    try {
+      const row = db.prepare(`
+        SELECT is_locked, locked_until, failed_login_attempts 
+        FROM users 
+        WHERE id = ?
+      `).get(userId);
+      return row || { is_locked: 0, locked_until: null, failed_login_attempts: 0 };
+    } catch (err) {
+      throw err;
+    }
   }
 };
 

@@ -44,15 +44,15 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-// Generate JWT token (never expires)
+// Generate JWT token (expires in 30 days)
 const generateToken = (user) => {
   return jwt.sign(
     { 
       userId: user.id, 
       username: user.username 
     },
-    JWT_SECRET
-    // No expiration - token lasts forever
+    JWT_SECRET,
+    { expiresIn: '30d' } // Token expires in 30 days
   );
 };
 

@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import { userDb, db } from '../database/db.js';
 import { generateToken, authenticateToken } from '../middleware/auth.js';
+import { loginLimiter, accountLimiter, trackFailedLogin, clearFailedAttempts } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -78,8 +79,8 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// User login
-router.post('/login', async (req, res) => {
+// User login with rate limiting and account locking
+router.post('/login', loginLimiter, accountLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -91,14 +92,31 @@ router.post('/login', async (req, res) => {
     // Get user from database
     const user = userDb.getUserByUsername(username);
     if (!user) {
+      // Track failed attempt for existing usernames to prevent username enumeration
       return res.status(401).json({ error: 'Invalid username or password' });
     }
     
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid username or password' });
+      // Track failed login attempt
+      const failureInfo = await trackFailedLogin(username);
+      
+      if (failureInfo && failureInfo.locked) {
+        return res.status(429).json({ 
+          error: failureInfo.message || 'Account is locked due to too many failed login attempts.' 
+        });
+      }
+      
+      const remainingAttempts = failureInfo ? failureInfo.remaining : 5;
+      return res.status(401).json({ 
+        error: 'Invalid username or password',
+        remainingAttempts: remainingAttempts > 0 ? remainingAttempts : undefined
+      });
     }
+    
+    // Clear failed attempts on successful login
+    await clearFailedAttempts(user.id);
     
     // Generate token
     const token = generateToken(user);
