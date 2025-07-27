@@ -78,6 +78,22 @@ The application will start at the port you specified in your .env
 5. **Open your browser:**
    - Development: `http://localhost:3001`
 
+### Cross-Domain Deployment
+
+The application supports deployment with frontend and backend on different domains:
+
+```bash
+# Frontend configuration
+echo "VITE_API_BASE_URL=https://api.example.com" > .env
+npm run build
+
+# Backend configuration  
+echo "CORS_ORIGINS=https://app.example.com" >> .env
+npm run server
+```
+
+See [Cross-Domain Deployment Guide](docs/CROSS_DOMAIN_DEPLOYMENT.md) for detailed instructions.
+
 ## Security & Tools Configuration
 
 **🔒 Important Notice**: All Claude Code tools are **disabled by default**. This prevents potentially harmful operations from running automatically.

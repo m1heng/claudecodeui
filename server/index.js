@@ -138,8 +138,25 @@ const server = http.createServer(app);
 // Single WebSocket server that handles both paths
 const wss = new WebSocketServer({ 
   server,
-  verifyClient: (info) => {
+  verifyClient: (info, cb) => {
     console.log('WebSocket connection attempt to:', info.req.url);
+    
+    // Check CORS origin for WebSocket
+    const origin = info.origin || info.req.headers.origin;
+    
+    // Get allowed origins from environment variable
+    const allowedOrigins = process.env.CORS_ORIGINS 
+      ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+      : [];
+    
+    // In development, allow all origins
+    if (process.env.NODE_ENV !== 'development' && origin) {
+      if (allowedOrigins.length > 0 && !allowedOrigins.includes('*') && !allowedOrigins.includes(origin)) {
+        console.log('❌ WebSocket connection rejected - invalid origin:', origin);
+        cb(false, 403, 'Forbidden');
+        return;
+      }
+    }
     
     // Extract token from query parameters or headers
     const url = new URL(info.req.url, 'http://localhost');
@@ -150,17 +167,52 @@ const wss = new WebSocketServer({
     const user = authenticateWebSocket(token);
     if (!user) {
       console.log('❌ WebSocket authentication failed');
-      return false;
+      cb(false, 401, 'Unauthorized');
+      return;
     }
     
     // Store user info in the request for later use
     info.req.user = user;
     console.log('✅ WebSocket authenticated for user:', user.username);
-    return true;
+    cb(true);
   }
 });
 
-app.use(cors());
+// Configure CORS with dynamic origin
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true);
+    
+    // Get allowed origins from environment variable
+    const allowedOrigins = process.env.CORS_ORIGINS 
+      ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+      : [];
+    
+    // In development, allow all origins
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    // Check if origin is allowed
+    if (allowedOrigins.length === 0 || allowedOrigins.includes('*')) {
+      // No specific origins configured or wildcard - allow all
+      callback(null, true);
+    } else if (allowedOrigins.includes(origin)) {
+      // Origin is in allowed list
+      callback(null, true);
+    } else {
+      // Origin not allowed
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // Allow cookies and auth headers
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+  exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Optional API key validation (if configured)

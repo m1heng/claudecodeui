@@ -1,3 +1,5 @@
+import { apiUrl } from '../config/api.config';
+
 // Utility function for authenticated API calls
 export const authenticatedFetch = (url, options = {}) => {
   const token = localStorage.getItem('auth-token');
@@ -10,12 +12,17 @@ export const authenticatedFetch = (url, options = {}) => {
     defaultHeaders['Authorization'] = `Bearer ${token}`;
   }
   
-  return fetch(url, {
+  // Use configured API URL
+  const fullUrl = apiUrl(url);
+  
+  return fetch(fullUrl, {
     ...options,
     headers: {
       ...defaultHeaders,
       ...options.headers,
     },
+    // Include credentials for CORS requests
+    credentials: 'include',
   });
 };
 
@@ -23,16 +30,20 @@ export const authenticatedFetch = (url, options = {}) => {
 export const api = {
   // Auth endpoints (no token required)
   auth: {
-    status: () => fetch('/api/auth/status'),
-    login: (username, password) => fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+    status: () => fetch(apiUrl('/api/auth/status'), {
+      credentials: 'include',
     }),
-    register: (username, password) => fetch('/api/auth/register', {
+    login: (username, password) => fetch(apiUrl('/api/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
+      credentials: 'include',
+    }),
+    register: (username, password) => fetch(apiUrl('/api/auth/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include',
     }),
     user: () => authenticatedFetch('/api/auth/user'),
     logout: () => authenticatedFetch('/api/auth/logout', { method: 'POST' }),
